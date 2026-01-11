@@ -1450,6 +1450,109 @@ input:checked+.slider:before {
     color: var(--primary-blue);
 }
 
+/* Camera Container Styles */
+.camera-container {
+    width: 100%;
+    margin-top: var(--spacing-md);
+}
+
+.camera-placeholder {
+    border: 2px dashed var(--primary-blue);
+    border-radius: 12px;
+    padding: var(--spacing-xl);
+    background: rgba(44, 116, 179, 0.02);
+    text-align: center;
+    min-height: 250px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-md);
+}
+
+.camera-placeholder i {
+    font-size: 4rem;
+    color: var(--primary-blue);
+    opacity: 0.6;
+}
+
+.camera-placeholder p {
+    color: var(--dark-gray);
+    margin: 0;
+    font-size: 1rem;
+}
+
+.camera-placeholder .camera-hint {
+    color: var(--medium-gray);
+    font-size: 0.9rem;
+    margin-top: var(--spacing-xs);
+}
+
+.camera-btn {
+    background: var(--gradient-primary);
+    color: var(--white);
+    border: none;
+    padding: var(--spacing-md) var(--spacing-xl);
+    border-radius: 10px;
+    font-family: var(--font-primary);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin: 0 auto;
+    box-shadow: var(--shadow-md);
+}
+
+.camera-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.camera-btn:active {
+    transform: translateY(0);
+}
+
+#cameraStream {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--black);
+}
+
+#videoStream {
+    width: 100%;
+    max-height: 400px;
+    object-fit: contain;
+    display: block;
+}
+
+.camera-controls {
+    position: absolute;
+    bottom: var(--spacing-md);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: var(--spacing-md);
+    align-items: center;
+    justify-content: center;
+}
+
+.camera-btn.capture-btn {
+    background: var(--white);
+    color: var(--primary-blue);
+    padding: var(--spacing-md) var(--spacing-xl);
+    font-size: 1.1rem;
+}
+
+.camera-btn.cancel-btn {
+    background: rgba(255, 255, 255, 0.9);
+    color: var(--danger-red);
+    padding: var(--spacing-md) var(--spacing-lg);
+}
+
 /* Upload Dropzone */
 .upload-dropzone {
     border: 2px dashed var(--primary-blue);
@@ -1838,3 +1941,404 @@ input:checked+.slider:before {
         grid-template-columns: 1fr;
     }
 }
+
+/* === CAMERA INTERFACE === */
+.camera-container {
+    width: 100%;
+    background: #000;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+    min-height: 300px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1rem;
+}
+
+.camera-placeholder {
+    text-align: center;
+    color: white;
+    padding: 2rem;
+}
+
+.camera-placeholder i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    color: var(--accent-cyan);
+}
+
+.camera-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 0.8rem 1.5rem;
+    border-radius: 50px;
+    cursor: pointer;
+    font-size: 1rem;
+    backdrop-filter: blur(5px);
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0.5rem;
+}
+
+
+
+.validation-item.warning i {
+    color: var(--warning-yellow);
+}
+
+.validation-score {
+    text-align: center;
+    padding: var(--spacing-md);
+    background: var(--white);
+    border-radius: 12px;
+}
+
+.score-label {
+    font-size: 0.85rem;
+    color: var(--medium-gray);
+    font-weight: 600;
+    margin-bottom: var(--spacing-xs);
+}
+
+.score-value {
+    font-size: 2.5rem;
+    font-weight: 800;
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: var(--spacing-sm);
+}
+
+.score-bar {
+    height: 12px;
+    background: var(--light-gray);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.score-fill {
+    height: 100%;
+    background: var(--gradient-success);
+    border-radius: 6px;
+    transition: width 1s ease;
+}
+
+.score-fill.low {
+    background: var(--gradient-danger);
+}
+
+.score-fill.medium {
+    background: var(--gradient-warning);
+}
+
+.score-fill.high {
+    background: var(--gradient-success);
+}
+
+/* Upload Actions */
+.upload-actions {
+    display: flex;
+    gap: var(--spacing-md);
+    justify-content: flex-end;
+    padding-top: var(--spacing-lg);
+}
+
+.btn-primary,
+.btn-secondary {
+    padding: var(--spacing-sm) var(--spacing-lg);
+    border-radius: 8px;
+    font-family: var(--font-primary);
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    border: none;
+}
+
+.btn-primary {
+    background: var(--gradient-primary);
+    color: var(--white);
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-primary:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-secondary {
+    background: var(--light-gray);
+    color: var(--dark-gray);
+}
+
+.btn-secondary:hover {
+    background: var(--medium-gray);
+    color: var(--white);
+}
+
+/* === RESPONSIVE DESIGN === */
+@media (max-width: 1200px) {
+    .main-container {
+        grid-template-columns: 1fr;
+    }
+
+    .sidebar {
+        position: relative;
+        top: 0;
+    }
+
+    .mpi-grid {
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    .top-bar {
+        flex-direction: column;
+        gap: var(--spacing-md);
+    }
+
+    .top-bar-left,
+    .top-bar-center,
+    .top-bar-right {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .alert-summary {
+        width: 100%;
+        justify-content: space-around;
+    }
+
+    .panel-tabs {
+        flex-direction: column;
+    }
+
+    .tab-btn {
+        justify-content: flex-start;
+    }
+
+    .action-grid,
+    .infrastructure-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* === CAMERA INTERFACE === */
+.camera-container {
+    width: 100%;
+    background: #000;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+    min-height: 300px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1rem;
+}
+
+.camera-placeholder {
+    text-align: center;
+    color: white;
+    padding: 2rem;
+}
+
+.camera-placeholder i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    color: var(--accent-cyan);
+}
+
+.camera-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 0.8rem 1.5rem;
+    border-radius: 50px;
+    cursor: pointer;
+    font-size: 1rem;
+    backdrop-filter: blur(5px);
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0.5rem;
+}
+
+.camera-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+}
+
+.camera-btn.capture-btn {
+    background: #00D9FF;
+    background: linear-gradient(135deg, #00D9FF 0%, #0088FF 100%);
+    border: none;
+    color: white;
+    font-weight: 700;
+    width: auto;
+    height: auto;
+    border-radius: 50px;
+    /* Pill shape */
+    padding: 12px 30px;
+    justify-content: center;
+    font-size: 1.1rem;
+    box-shadow: 0 4px 15px rgba(0, 210, 255, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.camera-btn.cancel-btn {
+    background: #FF4757;
+    background: linear-gradient(135deg, #FF4757 0%, #FF6B81 100%);
+    border: none;
+    color: white;
+    font-weight: 700;
+    width: auto;
+    height: auto;
+    border-radius: 50px;
+    /* Pill shape */
+    padding: 12px 30px;
+    justify-content: center;
+    font-size: 1.1rem;
+    box-shadow: 0 4px 15px rgba(255, 71, 87, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.camera-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+#cameraStream {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#videoStream {
+    width: 100%;
+    height: 300px;
+    object-fit: cover;
+    border-radius: 12px;
+}
+
+/* Camera Button Fixes - Robust Centering */
+.camera-controls {
+    position: absolute;
+    bottom: 20px;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    width: auto !important;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    z-index: 20;
+    white-space: nowrap;
+}
+
+}
+/* =========================================
+   FINAL CAMERA FIX - OVERRIDE ALL PREVIOUS
+   ========================================= */
+
+/* 1. Container & Stream */
+#cameraStream {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#videoStream {
+    width: 100%;
+    height: 300px;
+    object-fit: cover;
+    border-radius: 12px;
+}
+
+/* 2. Controls Container - ROBUST CENTERING */
+.camera-controls {
+    position: absolute;
+    bottom: 20px;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    width: auto !important;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    z-index: 9999; /* High Z-index */
+    white-space: nowrap;
+}
+
+/* 3. Buttons - PILL SHAPE & COLORS */
+.camera-btn {
+    border: none !important;
+    color: white !important;
+    padding: 12px 30px !important;
+    border-radius: 50px !important;
+    cursor: pointer;
+    font-size: 1.1rem !important;
+    font-weight: 700 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    transition: transform 0.2s, box-shadow 0.2s;
+    display: flex !important;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.2); /* Default fallback */
+}
+
+.camera-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+}
+
+.camera-btn.capture-btn {
+    background: #00D9FF !important;
+    background: linear-gradient(135deg, #00D9FF 0%, #0088FF 100%) !important;
+}
+
+.camera-btn.cancel-btn {
+    background: #FF4757 !important;
+    background: linear-gradient(135deg, #FF4757 0%, #FF6B81 100%) !important;
+}
+
+/* 4. Hide Unwanted Sections */
+button[data-panel='incidents'],
+button[data-panel='performance'],
+#panel-incidents,
+#panel-performance {
+    display: none !important;
+}
+

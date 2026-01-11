@@ -18,6 +18,21 @@ let activeLayers = {
     traffic: false
 };
 
+// === SUPABASE CONFIGURATION ===
+// ⚠️ REPLACE THESE WITH YOUR OWN KEYS FROM SUPABASE DASHBOARD ⚠️
+const SUPABASE_URL = 'https://your-project-url.supabase.co';
+const SUPABASE_KEY = 'your-anon-key';
+const supabase = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+
+// === API CONFIGURATION ===
+// We now use Supabase directly, but keep this for reference
+const API_BASE_URL = 'http://localhost:3000/api';
+const API_ENDPOINTS = {
+    incidents: `${API_BASE_URL}/incidents`,
+    stats: `${API_BASE_URL}/incidents/stats/summary`,
+    training: `${API_BASE_URL}/incidents/training/export`
+};
+
 // === MOCK DATA GENERATION ===
 const wardNames = [
     'Central Delhi - 1', 'Central Delhi - 2', 'Central Delhi - 3',
@@ -781,6 +796,8 @@ function animateValue(element, start, end, duration) {
 
 let uploadedImage = null;
 let currentGPS = null;
+let cameraStream = null;
+let watchPositionId = null;
 let validationResults = {
     timestamp: null,
     aiGenerated: null,
@@ -794,12 +811,14 @@ function initializeUploadModal() {
     const modal = document.getElementById('uploadModal');
     const closeBtn = document.getElementById('closeUploadModal');
     const cancelBtn = document.getElementById('cancelUpload');
-    const dropzone = document.getElementById('dropzone');
-    const fileInput = document.getElementById('incidentPhoto');
-    const browseBtn = document.getElementById('browseBtn');
+    const openCameraBtn = document.getElementById('openCameraBtn');
+    const captureBtn = document.getElementById('captureBtn');
+    const cancelCameraBtn = document.getElementById('cancelCameraBtn');
     const removeImageBtn = document.getElementById('removeImageBtn');
     const captureGPSBtn = document.getElementById('captureGPS');
     const form = document.getElementById('incidentUploadForm');
+    const videoStream = document.getElementById('videoStream');
+    const canvas = document.getElementById('capturedCanvas');
 
     // Open modal
     reportBtn?.addEventListener('click', () => {
@@ -809,6 +828,8 @@ function initializeUploadModal() {
 
     // Close modal
     const closeModal = () => {
+        stopCamera();
+        stopLocationWatch();
         modal.classList.remove('show');
         resetUploadForm();
     };
@@ -816,92 +837,324 @@ function initializeUploadModal() {
     closeBtn?.addEventListener('click', closeModal);
     cancelBtn?.addEventListener('click', closeModal);
 
-    // Drag and drop
-    dropzone?.addEventListener('click', () => fileInput.click());
-    browseBtn?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        fileInput.click();
+    // Open camera
+    openCameraBtn?.addEventListener('click', () => {
+        openCamera();
     });
 
-    dropzone?.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dropzone.classList.add('dragover');
+    // Capture photo from camera
+    captureBtn?.addEventListener('click', () => {
+        capturePhoto(videoStream, canvas);
     });
 
-    dropzone?.addEventListener('dragleave', () => {
-        dropzone.classList.remove('dragover');
+    // Cancel camera
+    cancelCameraBtn?.addEventListener('click', () => {
+        stopCamera();
+        showCameraPlaceholder();
     });
 
-    dropzone?.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropzone.classList.remove('dragover');
-
-        const files = e.dataTransfer.files;
-        if (files.length > 0 && files[0].type.startsWith('image/')) {
-            handleImageUpload(files[0]);
-        }
-    });
-
-    // File input change
-    fileInput?.addEventListener('change', (e) => {
-        if (e.target.files.length > 0) {
-            handleImageUpload(e.target.files[0]);
-        }
-    });
-
-    // Remove image
+    // Remove/Retake image
     removeImageBtn?.addEventListener('click', () => {
         uploadedImage = null;
         document.getElementById('imagePreview').style.display = 'none';
-        document.getElementById('dropzone').style.display = 'block';
+        showCameraPlaceholder();
         document.getElementById('validationPanel').style.display = 'none';
         document.getElementById('submitIncident').disabled = true;
-        fileInput.value = '';
+        validateForm();
     });
 
     // GPS Capture
     captureGPSBtn?.addEventListener('click', captureLocation);
 
-    // Form submission
+    // Form submission with validation
     form?.addEventListener('submit', (e) => {
         e.preventDefault();
-        submitIncidentReport();
+        if (validateForm()) {
+            submitIncidentReport();
+        }
     });
 
-    // Update submit button when required fields change
+    // Real-time form validation
     document.getElementById('incidentWard')?.addEventListener('change', () => {
+        validateField('ward');
         if (uploadedImage) updateValidationScore();
     });
 
     document.getElementById('incidentType')?.addEventListener('change', () => {
+        validateField('type');
         if (uploadedImage) updateValidationScore();
+    });
+
+    document.getElementById('incidentDescription')?.addEventListener('input', () => {
+        const desc = document.getElementById('incidentDescription');
+        const maxLength = 1000;
+        if (desc.value.length > maxLength) {
+            desc.value = desc.value.substring(0, maxLength);
+        }
     });
 }
 
-function handleImageUpload(file) {
-    console.log('📸 Image uploaded:', file.name);
+// Open camera using getUserMedia
+async function openCamera() {
+    try {
+        const videoStream = document.getElementById('videoStream');
+        const placeholder = document.getElementById('cameraPlaceholder');
+        const streamDiv = document.getElementById('cameraStream');
+        const imageError = document.getElementById('imageError');
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        uploadedImage = {
-            file: file,
-            dataURL: e.target.result,
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            uploadTime: new Date()
-        };
+        // Request camera access
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: 'environment', // Use back camera on mobile
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            },
+            audio: false
+        });
 
-        // Show preview
-        document.getElementById('previewImage').src = e.target.result;
-        document.getElementById('imagePreview').style.display = 'block';
-        document.getElementById('dropzone').style.display = 'none';
+        // Show video stream
+        videoStream.srcObject = cameraStream;
+        placeholder.style.display = 'none';
+        streamDiv.style.display = 'block';
+        imageError.style.display = 'none';
 
-        // Run validation
-        validateImage();
-    };
+        // Play video
+        await videoStream.play();
 
-    reader.readAsDataURL(file);
+    } catch (error) {
+        console.error('Camera error:', error);
+        const imageError = document.getElementById('imageError');
+        imageError.textContent = 'Failed to access camera. Please allow camera permissions and try again.';
+        imageError.style.display = 'block';
+
+        if (error.name === 'NotAllowedError') {
+            alert('Camera access denied. Please allow camera permissions in your browser settings.');
+        } else if (error.name === 'NotFoundError') {
+            alert('No camera found. Please connect a camera and try again.');
+        } else {
+            alert('Failed to access camera: ' + error.message);
+        }
+    }
+}
+
+// Stop camera stream
+function stopCamera() {
+    if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+        cameraStream = null;
+    }
+    const videoStream = document.getElementById('videoStream');
+    if (videoStream) {
+        videoStream.srcObject = null;
+    }
+}
+
+// Show camera placeholder
+function showCameraPlaceholder() {
+    document.getElementById('cameraPlaceholder').style.display = 'block';
+    document.getElementById('cameraStream').style.display = 'none';
+}
+
+// Capture photo from video stream
+function capturePhoto(video, canvas) {
+    try {
+        const context = canvas.getContext('2d');
+
+        // Set canvas dimensions to match video
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        // Draw video frame to canvas
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        // Convert canvas to blob
+        canvas.toBlob((blob) => {
+            if (!blob) {
+                alert('Failed to capture photo. Please try again.');
+                return;
+            }
+
+            // Create file from blob
+            const file = new File([blob], 'camera-capture.jpg', { type: 'image/jpeg' });
+
+            // Read as data URL for preview
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                uploadedImage = {
+                    file: file,
+                    dataURL: e.target.result,
+                    name: file.name,
+                    size: file.size,
+                    type: file.type,
+                    uploadTime: new Date()
+                };
+
+                // Show preview
+                document.getElementById('previewImage').src = e.target.result;
+                document.getElementById('imagePreview').style.display = 'block';
+                document.getElementById('cameraStream').style.display = 'none';
+                document.getElementById('cameraPlaceholder').style.display = 'none';
+
+                // Stop camera
+                stopCamera();
+
+                // Run validation
+                validateImage();
+
+                // Validate form
+                validateForm();
+            };
+            reader.readAsDataURL(blob);
+        }, 'image/jpeg', 0.9);
+    } catch (error) {
+        console.error('Capture error:', error);
+        alert('Failed to capture photo. Please try again.');
+    }
+}
+
+// Form validation functions
+function validateField(fieldName) {
+    const field = document.getElementById(`incident${fieldName.charAt(0).toUpperCase() + fieldName.slice(1)}`);
+    const errorElement = document.getElementById(`${fieldName}Error`);
+
+    if (!field || !errorElement) return true;
+
+    let isValid = true;
+    let errorMessage = '';
+
+    switch (fieldName) {
+        case 'ward':
+            if (!field.value || field.value === '') {
+                isValid = false;
+                errorMessage = 'Please select a ward';
+            }
+            break;
+        case 'type':
+            if (!field.value || field.value === '') {
+                isValid = false;
+                errorMessage = 'Please select an incident type';
+            }
+            break;
+        case 'gps':
+            // GPS is optional - just show warning if not captured
+            if (!currentGPS) {
+                isValid = true; // Still valid, just show warning
+                errorMessage = 'GPS location recommended but not required';
+            }
+            break;
+    }
+
+    if (isValid) {
+        errorElement.style.display = 'none';
+        errorElement.textContent = '';
+        field.classList.remove('error');
+    } else {
+        errorElement.style.display = 'block';
+        errorElement.textContent = errorMessage;
+        field.classList.add('error');
+    }
+
+    return isValid;
+}
+
+function validateForm() {
+    const imageValid = uploadedImage !== null;
+    const wardValid = validateField('ward');
+    const typeValid = validateField('type');
+    // GPS is optional - don't block form submission if GPS not captured
+    // validateField('gps') will just show a warning but not fail
+
+    const imageError = document.getElementById('imageError');
+    if (!imageValid) {
+        imageError.textContent = 'Please capture a photo using the camera';
+        imageError.style.display = 'block';
+    } else {
+        imageError.style.display = 'none';
+    }
+
+    const gpsError = document.getElementById('gpsError');
+    if (gpsError && !currentGPS) {
+        gpsError.textContent = '⚠️ GPS location is recommended for better accuracy but not required. You can submit with ward selection only.';
+        gpsError.style.display = 'block';
+    } else if (gpsError && currentGPS) {
+        gpsError.style.display = 'none';
+    }
+
+    // Capture high-accuracy GPS location
+    function captureLocation() {
+        const gpsBtn = document.getElementById('captureGPS');
+        const gpsDisplay = document.getElementById('gpsDisplay');
+        const gpsError = document.getElementById('gpsError');
+
+        if (!navigator.geolocation) {
+            alert('Geolocation is not supported by your browser');
+            return;
+        }
+
+        gpsBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Locating...';
+        gpsBtn.classList.add('capturing');
+        gpsBtn.disabled = true;
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                currentGPS = {
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude,
+                    accuracy: position.coords.accuracy,
+                    timestamp: position.timestamp
+                };
+
+                gpsBtn.innerHTML = '<i class="fas fa-check"></i> Location Captured';
+                gpsBtn.classList.remove('capturing');
+                gpsBtn.disabled = false;
+
+                gpsDisplay.classList.add('captured');
+                const accuracyStatus = currentGPS.accuracy < 20 ? '✓ High' : currentGPS.accuracy < 50 ? '⚠️ Medium' : '⚠️ Low';
+
+                gpsDisplay.innerHTML = `
+                <small>
+                    <strong>${accuracyStatus} Accuracy</strong><br>
+                    📍 ${currentGPS.latitude.toFixed(6)}, ${currentGPS.longitude.toFixed(6)}<br>
+                    Accuracy: ±${Math.round(currentGPS.accuracy)}m
+                </small>
+            `;
+
+                // Clear error if exists
+                if (gpsError) gpsError.style.display = 'none';
+
+                // Validate
+                validateField('gps');
+            },
+            (error) => {
+                console.error('GPS Error:', error);
+                gpsBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Retry Location';
+                gpsBtn.classList.remove('capturing');
+                gpsBtn.disabled = false;
+
+                let msg = 'Failed to get location.';
+                if (error.code === 1) msg = 'Location permission denied.';
+                else if (error.code === 2) msg = 'Location unavailable.';
+                else if (error.code === 3) msg = 'Location request timed out.';
+
+                alert(msg + ' Please ensure GPS is enabled.');
+            },
+            {
+                enableHighAccuracy: true, // Request high accuracy (GPS)
+                timeout: 15000,           // Wait up to 15s
+                maximumAge: 0             // No cached positions
+            }
+        );
+    }
+
+    // Form is valid if image, ward, and type are filled (GPS is optional)
+    const allValid = imageValid && wardValid && typeValid;
+
+    const submitBtn = document.getElementById('submitIncident');
+    if (submitBtn) {
+        submitBtn.disabled = !allValid;
+    }
+
+    return allValid;
 }
 
 function validateImage() {
@@ -1063,90 +1316,281 @@ function updateValidationScore() {
     submitBtn.disabled = !(confidencePercent >= 50 && hasRequiredFields);
 }
 
+// Stop location watching
+function stopLocationWatch() {
+    if (watchPositionId !== null) {
+        navigator.geolocation.clearWatch(watchPositionId);
+        watchPositionId = null;
+    }
+}
+
 function captureLocation() {
     const gpsBtn = document.getElementById('captureGPS');
     const gpsDisplay = document.getElementById('gpsDisplay');
 
-    gpsBtn.classList.add('capturing');
-    gpsBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Capturing...';
+    // Stop any existing watch
+    stopLocationWatch();
 
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                currentGPS = {
-                    latitude: position.coords.latitude,
-                    longitude: position.coords.longitude,
-                    accuracy: position.coords.accuracy
-                };
-
-                gpsBtn.classList.remove('capturing');
-                gpsBtn.innerHTML = '<i class="fas fa-check"></i> Location Captured';
-
-                gpsDisplay.classList.add('captured');
-                gpsDisplay.innerHTML = `
-                    <small>
-                        📍 ${currentGPS.latitude.toFixed(6)}, ${currentGPS.longitude.toFixed(6)}<br>
-                        Accuracy: ±${Math.round(currentGPS.accuracy)}m
-                    </small>
-                `;
-
-                // Re-run location validation
-                if (uploadedImage) {
-                    validateLocation();
-                }
-            },
-            (error) => {
-                console.error('GPS Error:', error);
-                gpsBtn.classList.remove('capturing');
-                gpsBtn.innerHTML = '<i class="fas fa-location-arrow"></i> Try Again';
-
-                gpsDisplay.innerHTML = '<small style="color: #FF4757;">⚠️ Location access denied</small>';
-
-                alert('Please enable location permissions to capture GPS coordinates.');
-            }
-        );
-    } else {
+    // Check if geolocation is supported
+    if (!navigator.geolocation) {
         gpsBtn.classList.remove('capturing');
-        gpsBtn.innerHTML = '<i class="fas fa-times"></i> Not Supported';
-        alert('Geolocation is not supported by your browser.');
+        gpsBtn.disabled = false;
+        gpsBtn.innerHTML = '<i class="fas fa-location-arrow"></i> Capture Location';
+        gpsDisplay.innerHTML = '<small style="color: #FF4757;">⚠️ Geolocation is not supported by your browser</small>';
+        alert('Geolocation is not supported by your browser. Please use a modern browser like Chrome, Firefox, or Edge.');
+        return;
+    }
+
+    // Note: Some browsers may restrict geolocation from file:// protocol
+    // But we'll try anyway - the browser will handle permissions
+    // If it fails, we'll show a helpful error message
+
+    gpsBtn.classList.add('capturing');
+    gpsBtn.disabled = true;
+    gpsBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Capturing Location...';
+    gpsDisplay.innerHTML = '<small><i class="fas fa-spinner fa-spin"></i> Requesting location access...<br>Please allow location permissions if prompted.</small>';
+
+    // Try with less strict options first - prioritize speed over accuracy
+    // Start with cached position if available
+    const quickOptions = {
+        enableHighAccuracy: false,  // Don't require GPS initially
+        timeout: 30000,  // 30 seconds - longer timeout
+        maximumAge: 300000  // Accept cached position up to 5 minutes old
+    };
+
+    const accurateOptions = {
+        enableHighAccuracy: true,  // Try GPS for better accuracy
+        timeout: 60000,  // 60 seconds - much longer for GPS to get fix
+        maximumAge: 60000  // Accept cached position up to 1 minute old
+    };
+
+    // First attempt: Quick position (cached or network-based)
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            // Success! Use this position
+            console.log('Location captured successfully:', position.coords);
+            gpsBtn.classList.remove('capturing');
+            gpsBtn.disabled = false;
+            finalizeLocationCapture(position, gpsBtn, gpsDisplay);
+        },
+        (error) => {
+            console.warn('Quick location attempt failed, trying accurate GPS...', error);
+
+            // Update display
+            gpsDisplay.innerHTML = '<small><i class="fas fa-spinner fa-spin"></i> Getting precise GPS location...<br>This may take 30-45 seconds. Please wait.</small>';
+
+            // Second attempt: High accuracy GPS
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    // Success with GPS!
+                    console.log('Accurate GPS location captured:', position.coords);
+                    gpsBtn.classList.remove('capturing');
+                    gpsBtn.disabled = false;
+                    finalizeLocationCapture(position, gpsBtn, gpsDisplay);
+                },
+                (error) => {
+                    // All attempts failed
+                    console.error('GPS Error:', error);
+                    stopLocationWatch();
+
+                    gpsBtn.classList.remove('capturing');
+                    gpsBtn.disabled = false;
+                    gpsBtn.innerHTML = '<i class="fas fa-location-arrow"></i> Try Again';
+
+                    let errorMessage = '';
+                    let errorDetails = '';
+
+                    switch (error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMessage = '⚠️ Location access denied';
+                            // Check if running from file:// and provide specific help
+                            const isFileProtocol = window.location.protocol === 'file:';
+                            if (isFileProtocol) {
+                                errorDetails = 'Location access is restricted for local files.\n\nTo enable GPS:\n1. Open terminal in this folder\n2. Run: python -m http.server 8000\n3. Open: http://localhost:8000/index.html\n\nOr use: npx serve .';
+                            } else {
+                                errorDetails = 'Please:\n1. Click the location icon (🔒) in your browser address bar\n2. Allow location access\n3. Reload the page and try again';
+                            }
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMessage = '⚠️ Location unavailable';
+                            errorDetails = 'Please:\n1. Enable GPS on your device\n2. Ensure location services are enabled\n3. Move to an area with better signal (outdoors)\n4. Try again';
+                            break;
+                        case error.TIMEOUT:
+                            errorMessage = '⚠️ Location request timed out';
+                            errorDetails = 'GPS location timed out. This is OK - you can still submit the incident with ward selection only.\n\nIf you want to try again:\n1. Go outdoors for better GPS signal\n2. Enable location services\n3. Click "Try Again"';
+                            break;
+                        default:
+                            errorMessage = '⚠️ Unable to get location';
+                            const isFileProtocol2 = window.location.protocol === 'file:';
+                            if (isFileProtocol2) {
+                                errorDetails = 'Location may not work from local files.\n\nTo fix:\n1. Run: python -m http.server 8000\n2. Open: http://localhost:8000/index.html';
+                            } else {
+                                errorDetails = 'Unknown error. Please try:\n1. Refreshing the page\n2. Checking browser location permissions\n3. Ensuring GPS is enabled on your device';
+                            }
+                            break;
+                    }
+
+                    // For timeout, show orange warning (not red error) since GPS is optional
+                    const isTimeout = error.code === error.TIMEOUT;
+                    const colorStyle = isTimeout ? '#FFA500' : '#FF4757';
+                    gpsDisplay.innerHTML = `<small style="color: ${colorStyle};"><strong>${errorMessage}</strong><br>${errorDetails}</small>`;
+
+                    // Only show alert for permission denied (most critical)
+                    // For timeout, don't show alert since GPS is optional
+                    if (error.code === error.PERMISSION_DENIED) {
+                        alert(errorMessage + '\n\n' + errorDetails);
+                    }
+
+                    // Re-validate form to ensure submit button is enabled
+                    validateForm();
+                },
+                accurateOptions
+            );
+        },
+        quickOptions
+    );
+}
+
+function finalizeLocationCapture(position, gpsBtn, gpsDisplay) {
+    currentGPS = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+        altitude: position.coords.altitude || null,
+        heading: position.coords.heading || null,
+        speed: position.coords.speed || null,
+        timestamp: position.timestamp
+    };
+
+    gpsBtn.classList.remove('capturing');
+    gpsBtn.disabled = false;
+    gpsBtn.innerHTML = '<i class="fas fa-check"></i> Location Captured';
+
+    gpsDisplay.classList.add('captured');
+
+    const accuracyStatus = currentGPS.accuracy < 20 ? '✓ High' : currentGPS.accuracy < 50 ? '⚠️ Medium' : '⚠️ Low';
+    gpsDisplay.innerHTML = `
+        <small>
+            <strong>${accuracyStatus} Accuracy</strong><br>
+            📍 ${currentGPS.latitude.toFixed(6)}, ${currentGPS.longitude.toFixed(6)}<br>
+            Accuracy: ±${Math.round(currentGPS.accuracy)}m
+        </small>
+    `;
+
+    // Update validation
+    validateField('gps');
+
+    // Re-run location validation
+    if (uploadedImage) {
+        validateLocation();
+        updateValidationScore();
+    }
+
+    // Re-validate form
+    validateForm();
+}
+
+async function submitIncidentReport() {
+    console.log('📤 Submitting incident report to Supabase...');
+
+    // Show loading state
+    const submitBtn = document.getElementById('submitIncident');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+
+    try {
+        if (!supabase) {
+            throw new Error('Supabase client not initialized. Please check your API keys.');
+        }
+
+        // 1. Upload Image to Supabase Storage
+        const file = uploadedImage.file;
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}.${fileExt}`;
+        const filePath = `${fileName}`;
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('incident-images')
+            .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+            .from('incident-images')
+            .getPublicUrl(filePath);
+
+        // 2. Insert Record into Supabase Database
+        const { data: insertData, error: insertError } = await supabase
+            .from('incidents')
+            .insert([
+                {
+                    type: document.getElementById('incidentType').value,
+                    ward: document.getElementById('incidentWard').selectedOptions[0].text,
+                    description: document.getElementById('incidentDescription').value || '',
+                    image_url: publicUrl,
+                    image_filename: fileName,
+                    gps_latitude: currentGPS ? currentGPS.latitude : null,
+                    gps_longitude: currentGPS ? currentGPS.longitude : null,
+                    gps_accuracy: currentGPS ? currentGPS.accuracy : null,
+                    validation_overall_score: parseInt(document.getElementById('scoreValue').textContent) || 0,
+                    status: 'pending'
+                }
+            ])
+            .select();
+
+        if (insertError) throw insertError;
+
+        console.log('✅ Incident submitted successfully:', insertData);
+
+        // Create incident object for frontend display
+        const newIncident = {
+            id: insertData[0].id,
+            type: insertData[0].type,
+            status: 'pending',
+            ward: insertData[0].ward,
+            time: 'Just now',
+            severity: calculateSeverityFromScore(insertData[0].validation_overall_score),
+            description: insertData[0].description,
+            image: publicUrl,
+            validationScore: insertData[0].validation_overall_score
+        };
+
+        // Add to incidents data
+        incidentsData.unshift(newIncident);
+        renderIncidents();
+
+        // Close modal & Reset
+        document.getElementById('uploadModal').classList.remove('show');
+        resetUploadForm();
+
+        // Success Message
+        alert('✅ Incident reported successfully!\n\nSaved to Supabase Cloud Database.\nAuthorities will review your submission.');
+        switchPanel('incidents');
+
+    } catch (error) {
+        console.error('❌ Error submitting incident:', error);
+        alert(`❌ Failed to submit incident:\n${error.message}\n\nPlease check your Supabase API keys in app.js`);
+
+        // Restore button
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
     }
 }
 
-function submitIncidentReport() {
-    console.log('📤 Submitting incident report...');
-
-    const newIncident = {
-        id: incidentsData.length + 1,
-        type: document.getElementById('incidentType').value,
-        status: 'pending',
-        ward: document.getElementById('incidentWard').selectedOptions[0].text,
-        time: 'Just now',
-        severity: 2,
-        description: document.getElementById('incidentDescription').value || 'User-reported incident',
-        gps: currentGPS,
-        validationScore: parseInt(document.getElementById('scoreValue').textContent),
-        image: uploadedImage?.dataURL
-    };
-
-    // Add to incidents data
-    incidentsData.unshift(newIncident);
-
-    // Re-render incidents
-    renderIncidents();
-
-    // Close modal
-    document.getElementById('uploadModal').classList.remove('show');
-
-    // Show success message
-    alert('✅ Incident reported successfully! Authorities will review your submission.');
-
-    // Switch to incidents tab
-    switchPanel('incidents');
-
-    console.log('Incident submitted:', newIncident);
+// Helper function to calculate severity from validation score
+function calculateSeverityFromScore(score) {
+    if (score >= 80) return 1;
+    if (score >= 60) return 2;
+    return 3;
 }
 
 function resetUploadForm() {
+    // Stop camera and location tracking
+    stopCamera();
+    stopLocationWatch();
+
     uploadedImage = null;
     currentGPS = null;
     validationResults = {
@@ -1158,16 +1602,33 @@ function resetUploadForm() {
 
     document.getElementById('incidentUploadForm').reset();
     document.getElementById('imagePreview').style.display = 'none';
-    document.getElementById('dropzone').style.display = 'block';
+    document.getElementById('cameraPlaceholder').style.display = 'block';
+    document.getElementById('cameraStream').style.display = 'none';
     document.getElementById('validationPanel').style.display = 'none';
     document.getElementById('submitIncident').disabled = true;
 
+    // Clear error messages
+    const errorElements = ['imageError', 'wardError', 'typeError', 'gpsError'];
+    errorElements.forEach(id => {
+        const elem = document.getElementById(id);
+        if (elem) {
+            elem.style.display = 'none';
+            elem.textContent = '';
+        }
+    });
+
+    // Reset GPS display
     const gpsBtn = document.getElementById('captureGPS');
     const gpsDisplay = document.getElementById('gpsDisplay');
-    gpsBtn.innerHTML = '<i class="fas fa-location-arrow"></i> Use My Location';
-    gpsBtn.classList.remove('capturing');
-    gpsDisplay.classList.remove('captured');
-    gpsDisplay.innerHTML = '<small>Location not captured</small>';
+    if (gpsBtn) {
+        gpsBtn.innerHTML = '<i class="fas fa-location-arrow"></i> Capture Location';
+        gpsBtn.classList.remove('capturing');
+        gpsBtn.disabled = false;
+    }
+    if (gpsDisplay) {
+        gpsDisplay.classList.remove('captured');
+        gpsDisplay.innerHTML = '<small>Location not captured</small>';
+    }
 }
 
 // Initialize upload modal on load

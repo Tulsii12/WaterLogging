@@ -213,7 +213,7 @@
                     <button class="tab-btn active" data-panel="mpi"><i class="fas fa-chart-line"></i> MPI
                         Dashboard</button>
                     <button class="tab-btn" data-panel="alerts"><i class="fas fa-bell"></i> Rainfall Alerts</button>
-                    <button class="tab-btn" data-panel="incidents"><i class="fas fa-camera"></i> Live Incidents</button>
+
                     <button class="tab-btn" data-panel="actions"><i class="fas fa-tasks"></i> Action Center</button>
                     <button class="tab-btn" data-panel="infrastructure"><i class="fas fa-wrench"></i>
                         Infrastructure</button>
@@ -396,28 +396,41 @@
                 <!-- Upload Form -->
                 <form id="incidentUploadForm">
 
-                    <!-- Photo Upload Section -->
+                    <!-- Camera Capture Section -->
                     <div class="upload-section">
-                        <h4><i class="fas fa-image"></i> Upload Photo Evidence</h4>
-                        <div class="upload-dropzone" id="dropzone">
-                            <input type="file" id="incidentPhoto" accept="image/*" hidden>
-                            <div class="dropzone-content">
-                                <i class="fas fa-cloud-upload-alt"></i>
-                                <p><strong>Drag & drop</strong> your photo here</p>
-                                <p class="dropzone-hint">or click to browse</p>
-                                <button type="button" class="browse-btn" id="browseBtn">
-                                    <i class="fas fa-folder-open"></i> Browse Files
+                        <div class="camera-container" id="cameraContainer">
+                            <div id="cameraPlaceholder" class="camera-placeholder">
+                                <i class="fas fa-camera"></i>
+                                <p><strong>Capture Live Photo</strong></p>
+                                <p class="camera-hint">Click below to open your camera</p>
+                                <button type="button" class="camera-btn" id="openCameraBtn">
+                                    <i class="fas fa-camera"></i> Open Camera
+                                </button>
+                            </div>
+
+                            <!-- Camera Video Stream -->
+                            <div id="cameraStream" style="display: none;">
+                                <video id="videoStream" autoplay playsinline></video>
+                                <div class="camera-controls">
+                                    <button type="button" class="camera-btn capture-btn" id="captureBtn">
+                                        <i class="fas fa-camera"></i> Capture Photo
+                                    </button>
+                                    <button type="button" class="camera-btn cancel-btn" id="cancelCameraBtn">
+                                        <i class="fas fa-times"></i> Cancel
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Image Preview -->
+                            <div class="image-preview" id="imagePreview" style="display: none;">
+                                <canvas id="capturedCanvas" style="display: none;"></canvas>
+                                <img id="previewImage" src="" alt="Preview">
+                                <button type="button" class="remove-image-btn" id="removeImageBtn">
+                                    <i class="fas fa-times"></i> Retake
                                 </button>
                             </div>
                         </div>
-
-                        <!-- Image Preview -->
-                        <div class="image-preview" id="imagePreview" style="display: none;">
-                            <img id="previewImage" src="" alt="Preview">
-                            <button type="button" class="remove-image-btn" id="removeImageBtn">
-                                <i class="fas fa-times"></i> Remove
-                            </button>
-                        </div>
+                        <small class="form-error" id="imageError" style="display: none; color: #FF4757;"></small>
                     </div>
 
                     <!-- Location Section -->
@@ -428,26 +441,29 @@
                                 <label for="incidentWard">Select Ward *</label>
                                 <select id="incidentWard" required>
                                     <option value="">Choose a ward...</option>
-                                    <option value="central-1">Central Delhi - 1</option>
-                                    <option value="central-2">Central Delhi - 2</option>
-                                    <option value="north-1">North Delhi - 1</option>
-                                    <option value="north-2">North Delhi - 2</option>
-                                    <option value="south-1">South Delhi - 1</option>
-                                    <option value="south-2">South Delhi - 2</option>
-                                    <option value="east-1">East Delhi - 1</option>
-                                    <option value="east-2">East Delhi - 2</option>
-                                    <option value="west-1">West Delhi - 1</option>
-                                    <option value="west-2">West Delhi - 2</option>
+                                    <option value="Central Delhi - 1">Central Delhi - 1</option>
+                                    <option value="Central Delhi - 2">Central Delhi - 2</option>
+                                    <option value="North Delhi - 1">North Delhi - 1</option>
+                                    <option value="North Delhi - 2">North Delhi - 2</option>
+                                    <option value="South Delhi - 1">South Delhi - 1</option>
+                                    <option value="South Delhi - 2">South Delhi - 2</option>
+                                    <option value="East Delhi - 1">East Delhi - 1</option>
+                                    <option value="East Delhi - 2">East Delhi - 2</option>
+                                    <option value="West Delhi - 1">West Delhi - 1</option>
+                                    <option value="West Delhi - 2">West Delhi - 2</option>
                                 </select>
+                                <small class="form-error" id="wardError" style="display: none; color: #FF4757;"></small>
                             </div>
                             <div class="form-group">
-                                <label>GPS Coordinates</label>
+                                <label>GPS Coordinates <small style="color: #666; font-weight: normal;">(Recommended but
+                                        optional)</small></label>
                                 <button type="button" class="gps-btn" id="captureGPS">
-                                    <i class="fas fa-location-arrow"></i> Use My Location
+                                    <i class="fas fa-location-arrow"></i> Capture Location
                                 </button>
                                 <div class="gps-display" id="gpsDisplay">
                                     <small>Location not captured</small>
                                 </div>
+                                <small class="form-error" id="gpsError" style="display: none; color: #FFA500;"></small>
                             </div>
                         </div>
                     </div>
@@ -463,11 +479,14 @@
                                 <option value="pothole">Pothole</option>
                                 <option value="drainage">Drainage Blockage</option>
                             </select>
+                            <small class="form-error" id="typeError" style="display: none; color: #FF4757;"></small>
                         </div>
                         <div class="form-group">
                             <label for="incidentDescription">Description</label>
                             <textarea id="incidentDescription" rows="3"
-                                placeholder="Provide additional details about the incident..."></textarea>
+                                placeholder="Provide additional details about the incident..."
+                                maxlength="1000"></textarea>
+                            <small class="form-hint">Maximum 1000 characters</small>
                         </div>
                     </div>
 
