@@ -1,13 +1,31 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import incidentRoutes from './routes/incidents.js';
+import http from 'http';
+import { Server } from 'socket.io';
 import supabase from './config/supabase.js';
+
+// Import routes (Ensure these files exist and use export default)
+import wardRoutes from './routes/wards.js';
+import incidentRoutes from './routes/incidents.js';
+import alertRoutes from './routes/alerts.js';
+
+// Import middleware
+import errorHandler from './middleware/errorHandler.js';
+import rateLimiter from './middleware/rateLimiter.js';
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: process.env.FRONTEND_URL || '*',
+        methods: ['GET', 'POST']
+    }
+});
+
+const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors({
@@ -16,68 +34,46 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(rateLimiter);
 
 // Routes
+app.use('/api/wards', wardRoutes);
 app.use('/api/incidents', incidentRoutes);
+app.use('/api/alerts', alertRoutes);
 
-// Health check endpoint
+// Health check with Supabase test
 app.get('/health', async (req, res) => {
     try {
-        // Test Supabase connection
-        const { data, error } = await supabase
-            .from('incidents')
-            .select('id')
-            .limit(1);
-
+        const { error } = await supabase.from('incidents').select('id').limit(1);
         res.json({
             status: 'OK',
-            message: 'Monsoon Backend API is running',
+            message: 'Delhi Water-Logging API is running',
             database: error ? 'Disconnected' : 'Connected',
             timestamp: new Date().toISOString()
         });
-    } catch (error) {
-        res.json({
-            status: 'OK',
-            message: 'Monsoon Backend API is running',
-            database: 'Error',
-            timestamp: new Date().toISOString()
-        });
+    } catch (err) {
+        res.status(500).json({ status: 'Error', message: err.message });
     }
 });
 
-// Test Supabase connection on startup
-async function testSupabaseConnection() {
-    try {
-        const { data, error } = await supabase
-            .from('incidents')
-            .select('id')
-            .limit(1);
+// WebSocket connection
+io.on('connection', (socket) => {
+    console.log('✅ Client connected:', socket.id);
+    socket.on('disconnect', () => {
+        console.log('❌ Client disconnected:', socket.id);
+    });
+});
 
-        if (error) {
-            console.error('❌ Supabase connection error:', error.message);
-            console.log('⚠️  Please check your Supabase configuration in .env file');
-            console.log('   Make sure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set correctly');
-        } else {
-            console.log('✅ Connected to Supabase');
-            console.log(`📚 Supabase URL: ${process.env.SUPABASE_URL}`);
-        }
-    } catch (error) {
-        console.error('❌ Supabase connection test failed:', error.message);
-    }
-}
+// Error handling
+app.use(errorHandler);
 
 // Start server
-app.listen(PORT, async () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-    console.log(`📡 API endpoint: http://localhost:${PORT}/api/incidents`);
-    console.log(`\n🌧️  Delhi Monsoon Incident Reporting API Ready!`);
-    await testSupabaseConnection();
-});
-
-// Graceful shutdown
-process.on('SIGINT', () => {
-    console.log('\n⏸️  Shutting down gracefully...');
-    process.exit(0);
+server.listen(PORT, () => {
+    console.log('=================================');
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📡 WebSocket enabled`);
+    console.log(`🌐 API: http://localhost:${PORT}`);
+    console.log('=================================');
 });
 
 export default app;
